@@ -26,9 +26,12 @@ jobs:
           java-version: "21"
 
       - name: Set up Android SDK
-        # Installs the SDK command-line tools and accepts the licences, so Gradle can
-        # download platform 37 and the build tools it needs on its own.
-        uses: android-actions/setup-android@v3
+        # GitHub's ubuntu runners already ship the Android SDK (ANDROID_HOME). Accepting the
+        # licences lets Gradle download platform 37 and the build tools it needs on its own.
+        # (`|| true`: `yes` is killed by SIGPIPE when sdkmanager finishes, which is not an error.)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Set up Gradle (with dependency cache)
         uses: gradle/actions/setup-gradle@v4
