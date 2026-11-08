@@ -7,7 +7,7 @@ object StaticInk {
     fun strokes(stage: Stage, dead: Boolean = false, seed: Long = 1L): List<InkStroke> {
         val f = StrokeFactory(seed)
         val specs = buildList {
-            addAll(f.head())
+            if (stage.number >= 1) addAll(f.head())
             if (stage.number >= 2) addAll(f.face())
             if (stage.number >= 3) addAll(f.body())
             if (stage.number >= 4) addAll(f.gun())

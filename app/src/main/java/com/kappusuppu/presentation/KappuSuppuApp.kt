@@ -15,22 +15,18 @@ import androidx.navigation.compose.rememberNavController
 import com.kappusuppu.presentation.book.BookModeScreen
 import com.kappusuppu.presentation.game.GameScreen
 import com.kappusuppu.presentation.game.GameViewModel
-import com.kappusuppu.presentation.game.HandoffScreen
-import com.kappusuppu.presentation.game.NextStep
+import com.kappusuppu.presentation.game.TurnStep
 import com.kappusuppu.presentation.home.HomeScreen
 import com.kappusuppu.presentation.howtoplay.HowToPlayScreen
 import com.kappusuppu.presentation.result.ResultScreen
 import com.kappusuppu.presentation.roles.RoleScreen
-import com.kappusuppu.presentation.target.TargetScreen
 
 private object Route {
     const val HOME = "home"
     const val HOW = "howtoplay"
     const val ROLES = "roles"
     const val BOOK = "book"
-    const val HANDOFF = "handoff"
     const val GAME = "game"
-    const val TARGET = "target"
     const val RESULT = "result"
 }
 
@@ -46,14 +42,8 @@ fun KappuSuppuApp(vm: GameViewModel) {
         nav.navigate(Route.HOME) { popUpTo(Route.HOME) { inclusive = true } }
     }
 
-    fun handOff() {
-        nav.navigate(Route.HANDOFF) { popUpTo(Route.HOME) }
-    }
-
-    fun route(step: NextStep) = when (step) {
-        NextStep.TARGET -> nav.navigate(Route.TARGET)
-        NextStep.HANDOFF -> handOff()
-        NextStep.RESULT -> nav.navigate(Route.RESULT) { popUpTo(Route.HOME) }
+    fun startGameScreen() {
+        nav.navigate(Route.GAME) { popUpTo(Route.HOME) }
     }
 
     NavHost(
@@ -85,15 +75,9 @@ fun KappuSuppuApp(vm: GameViewModel) {
             BookModeScreen(
                 onPick = { mode ->
                     vm.startNewGame(mode)
-                    handOff()
+                    startGameScreen()
                 },
                 onBack = { nav.popBackStack() },
-            )
-        }
-        composable(Route.HANDOFF) {
-            HandoffScreen(
-                state = state,
-                onContinue = { nav.navigate(Route.GAME) { popUpTo(Route.HANDOFF) { inclusive = true } } },
             )
         }
         composable(Route.GAME) {
@@ -101,34 +85,19 @@ fun KappuSuppuApp(vm: GameViewModel) {
                 vm.setBoardVisible(true)
                 onDispose { vm.setBoardVisible(false) }
             }
+            // the last character fell: show the result once the final animations have finished
+            LaunchedEffect(state.step) {
+                if (state.step == TurnStep.GameOver) nav.navigate(Route.RESULT) { popUpTo(Route.HOME) }
+            }
             GameScreen(
                 state = state,
                 onSubmitPage = vm::submitPhysicalPage,
                 onClearError = vm::clearPageError,
                 onOpenBook = vm::openBook,
-                onConfirmSpread = vm::confirmSpread,
-                onContinue = { route(vm.continueFromFeedback()) },
+                onTarget = vm::fireAt,
                 onStrokeDrawn = vm::onStrokeDrawn,
                 onStrokesErased = vm::onStrokesErased,
                 onQuit = ::goHome,
-            )
-        }
-        composable(Route.TARGET) {
-            DisposableEffect(Unit) {
-                vm.setBoardVisible(true)
-                onDispose { vm.setBoardVisible(false) }
-            }
-            TargetScreen(
-                state = state,
-                onSelect = vm::selectTarget,
-                onCancel = {
-                    vm.cancelTarget()
-                    nav.popBackStack()
-                },
-                onFire = vm::confirmFire,
-                onContinue = { route(vm.continueFromTarget()) },
-                onStrokeDrawn = vm::onStrokeDrawn,
-                onStrokesErased = vm::onStrokesErased,
             )
         }
         composable(Route.RESULT) {
@@ -137,7 +106,7 @@ fun KappuSuppuApp(vm: GameViewModel) {
                 state = state,
                 onPlayAgain = {
                     vm.playAgain()
-                    handOff()
+                    startGameScreen()
                 },
                 onHome = ::goHome,
             )

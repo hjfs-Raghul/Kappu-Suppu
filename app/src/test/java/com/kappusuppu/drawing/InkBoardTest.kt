@@ -1,13 +1,13 @@
 package com.kappusuppu.drawing
 
 import com.kappusuppu.applied
+import com.kappusuppu.domain.actions.GameEvent
 import com.kappusuppu.domain.engine.GameEngine
 import com.kappusuppu.domain.model.Expression
 import com.kappusuppu.domain.model.Phase
 import com.kappusuppu.domain.model.PlayerId
 import com.kappusuppu.domain.model.Stage
-import com.kappusuppu.domain.actions.GameEvent
-import com.kappusuppu.with
+import com.kappusuppu.progress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -15,77 +15,93 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
 
+private val K = PlayerId.KAPPU
+private val S = PlayerId.SUPPU
 private fun InkBoard.groups(key: CharKey): Set<StrokeGroup> = of(key).map { it.group }.toSet()
 
 class InkBoardTest {
-    private val key = CharKey(PlayerId.KAPPU, 0)
+    private val key = CharKey(K, 0)
 
-    @Test fun stageOneIsOnlyAnEmptyCircleWithNoFaceOrBody() {
+    @Test fun aNewGameBoardIsCompletelyEmpty() {
         val board = InkBoard.newGame()
-        assertEquals(10, board.strokes.size)
-        board.strokes.forEach { (_, list) ->
-            assertEquals(1, list.size)
-            assertEquals(StrokeGroup.HEAD, list.single().group)
-        }
+        assertTrue(board.strokes.values.all { it.isEmpty() })
+        for (p in PlayerId.entries) for (i in 0..4) assertTrue(board.of(CharKey(p, i)).isEmpty())
+        assertFalse(board.isDrawing)
+        assertFalse(board.isAnimating)
+    }
+
+    @Test fun theFirstDigitDrawsOnlyAnEmptyCircle() {
+        val board = InkBoard.newGame().apply(GameEvent.Progressed(K, 0, Stage.CIRCLE))
+        assertEquals(setOf(StrokeGroup.HEAD), board.groups(key))
+        assertEquals(1, board.of(key).size)
+        assertTrue(board.of(key).single().phase == StrokePhase.DRAWING)
+        // no other cell got anything
+        assertTrue(board.of(CharKey(K, 1)).isEmpty() && board.of(CharKey(S, 0)).isEmpty())
     }
 
     @Test fun drawingIsCumulativeAndExistingStrokesAreNeverRegenerated() {
-        var board = InkBoard.newGame().completeAll()
+        var board = InkBoard.newGame().progress(K, 0, Stage.CIRCLE)
         val circle = board.of(key)
-        board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, Stage.FACE))
-        assertEquals(circle, board.of(key).take(1).map { it }) // same circle, untouched
+        board = board.apply(GameEvent.Progressed(K, 0, Stage.FACE))
+        assertEquals(circle, board.of(key).take(1)) // same circle, untouched
         assertEquals(setOf(StrokeGroup.HEAD, StrokeGroup.FACE), board.groups(key))
         board = board.completeAll()
         val withFace = board.of(key)
-        board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, Stage.BODY))
+        board = board.apply(GameEvent.Progressed(K, 0, Stage.BODY))
         assertEquals(withFace, board.of(key).take(withFace.size))
         assertEquals(setOf(StrokeGroup.HEAD, StrokeGroup.FACE, StrokeGroup.BODY), board.groups(key))
         board = board.completeAll()
         val withBody = board.of(key)
-        board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, Stage.GUN))
+        board = board.apply(GameEvent.Progressed(K, 0, Stage.GUN))
         assertEquals(withBody, board.of(key).take(withBody.size))
         assertTrue(board.groups(key).contains(StrokeGroup.GUN))
         board = board.completeAll()
         val withGun = board.of(key)
-        board = board.apply(GameEvent.BulletLoaded(PlayerId.KAPPU, 0))
+        board = board.apply(GameEvent.BulletLoaded(K, 0))
         assertEquals(withGun, board.of(key).take(withGun.size))
     }
 
     @Test fun onlyNewlyAddedStrokesAnimate() {
-        var board = InkBoard.newGame().completeAll()
+        var board = InkBoard.newGame().progress(K, 0, Stage.CIRCLE)
         assertFalse(board.isAnimating)
-        board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, Stage.FACE))
+        board = board.apply(GameEvent.Progressed(K, 0, Stage.FACE))
         val drawing = board.of(key).filter { it.phase == StrokePhase.DRAWING }
         assertEquals(3, drawing.size) // two eyes + mouth
         assertTrue(drawing.all { it.group == StrokeGroup.FACE })
         assertTrue(board.of(key).filter { it.group == StrokeGroup.HEAD }.all { it.phase == StrokePhase.DRAWN })
-        // other characters do not animate
-        assertTrue(board.of(CharKey(PlayerId.SUPPU, 3)).all { it.phase == StrokePhase.DRAWN })
     }
 
     @Test fun strokeIdsAreUnique() {
         var board = InkBoard.newGame()
-        board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, Stage.FACE)).apply(GameEvent.Progressed(PlayerId.KAPPU, 1, Stage.FACE))
+        board = board.apply(GameEvent.Progressed(K, 0, Stage.CIRCLE)).apply(GameEvent.Progressed(K, 1, Stage.CIRCLE))
+            .apply(GameEvent.Progressed(K, 0, Stage.FACE))
         val ids = board.strokes.values.flatten().map { it.id }
         assertEquals(ids.size, ids.toSet().size)
     }
 
-    @Test fun onlyTheBulletIsRedEverythingElseIsBlackGraphite() {
-        var board = InkBoard.newGame()
-        listOf(Stage.FACE, Stage.BODY, Stage.GUN).forEach { board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, it)) }
-        board = board.apply(GameEvent.BulletLoaded(PlayerId.KAPPU, 0))
-        board = board.apply(GameEvent.CharacterKilled(PlayerId.SUPPU, 0))
+    @Test fun bulletIsASingleThickRedLineWithNoArrowhead() {
+        val bullet = StrokeFactory(4).bullet()
+        assertEquals(1, bullet.size)
+        assertEquals(InkColor.RED, bullet.single().color)
+        val pts = bullet.single().points
+        // a straight horizontal line: all y values within a hair of each other
+        assertTrue(pts.maxOf { it.y } - pts.minOf { it.y } < 0.01f)
+        assertTrue(bullet.single().widthFactor > 2f)
+    }
+
+    @Test fun onlyBulletAndSplashAreRedEverythingElseIsGraphite() {
+        var board = InkBoard.newGame().progress(K, 0, Stage.LOADED)
+        board = board.apply(GameEvent.Progressed(S, 0, Stage.CIRCLE)).apply(GameEvent.CharacterKilled(S, 0))
         for (s in board.strokes.values.flatten()) {
-            if (s.group == StrokeGroup.BULLET) assertEquals(InkColor.RED, s.color) else assertEquals(InkColor.GRAPHITE, s.color)
+            val red = s.group == StrokeGroup.BULLET || s.group == StrokeGroup.SPLASH
+            assertEquals(s.group.name, if (red) InkColor.RED else InkColor.GRAPHITE, s.color)
         }
         assertTrue(board.of(key).any { it.color == InkColor.RED })
     }
 
     @Test fun gunDestructionRemovesOnlyGunAndBulletAndKeepsFaceAndBody() {
-        var board = InkBoard.newGame()
-        listOf(Stage.FACE, Stage.BODY, Stage.GUN).forEach { board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, it)) }
-        board = board.apply(GameEvent.BulletLoaded(PlayerId.KAPPU, 0)).completeAll()
-        board = board.apply(GameEvent.GunDestroyed(PlayerId.KAPPU, 0, hadBullet = true))
+        var board = InkBoard.newGame().progress(K, 0, Stage.LOADED)
+        board = board.apply(GameEvent.GunDestroyed(K, 0, hadBullet = true))
         val erasing = board.of(key).filter { it.phase == StrokePhase.ERASING }
         assertTrue(erasing.isNotEmpty())
         assertTrue(erasing.all { it.group == StrokeGroup.GUN || it.group == StrokeGroup.BULLET })
@@ -94,38 +110,41 @@ class InkBoardTest {
     }
 
     @Test fun shootingErasesOnlyTheBulletAndKeepsTheGun() {
-        var board = InkBoard.newGame()
-        listOf(Stage.FACE, Stage.BODY, Stage.GUN).forEach { board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, it)) }
-        board = board.apply(GameEvent.BulletLoaded(PlayerId.KAPPU, 0)).completeAll()
-        board = board.apply(GameEvent.ShotFired(PlayerId.KAPPU, 0, PlayerId.SUPPU, 0))
+        var board = InkBoard.newGame().progress(K, 0, Stage.LOADED)
+        board = board.apply(GameEvent.ShotFired(K, 0, S, 0))
         val erasing = board.of(key).filter { it.phase == StrokePhase.ERASING }
-        assertTrue(erasing.all { it.group == StrokeGroup.BULLET })
+        assertTrue(erasing.isNotEmpty() && erasing.all { it.group == StrokeGroup.BULLET })
         board = board.removeErased(key, erasing.map { it.id }.toSet())
         assertTrue(board.groups(key).contains(StrokeGroup.GUN))
         assertFalse(board.groups(key).contains(StrokeGroup.BULLET))
     }
 
     @Test fun rebuiltGunIsDrawnFreshAfterDestruction() {
-        var board = InkBoard.newGame()
-        listOf(Stage.FACE, Stage.BODY, Stage.GUN).forEach { board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, it)) }
+        var board = InkBoard.newGame().progress(K, 0, Stage.GUN)
         val firstGun = board.of(key).first { it.group == StrokeGroup.GUN }
-        board = board.completeAll().apply(GameEvent.GunDestroyed(PlayerId.KAPPU, 0, false)).completeAll()
+        board = board.apply(GameEvent.GunDestroyed(K, 0, false)).completeAll()
         assertFalse(board.groups(key).contains(StrokeGroup.GUN))
-        board = board.apply(GameEvent.Progressed(PlayerId.KAPPU, 0, Stage.GUN))
+        board = board.apply(GameEvent.Progressed(K, 0, Stage.GUN))
         val newGun = board.of(key).first { it.group == StrokeGroup.GUN }
         assertNotEquals(firstGun.id, newGun.id)
         assertNotEquals(firstGun.points, newGun.points) // a different pencil stroke
     }
 
-    @Test fun deadCharacterKeepsItsDrawingAndGetsACross() {
-        var board = InkBoard.newGame().completeAll()
-        board = board.apply(GameEvent.CharacterKilled(PlayerId.KAPPU, 0))
-        assertEquals(setOf(StrokeGroup.HEAD, StrokeGroup.CROSS), board.groups(key))
+    @Test fun deadCharacterKeepsItsDrawingAndGetsACrossAndASlightRedSplash() {
+        var board = InkBoard.newGame().progress(K, 0, Stage.CIRCLE)
+        board = board.apply(GameEvent.CharacterKilled(K, 0))
+        assertEquals(setOf(StrokeGroup.HEAD, StrokeGroup.CROSS, StrokeGroup.SPLASH), board.groups(key))
         assertEquals(2, board.of(key).count { it.group == StrokeGroup.CROSS })
+        assertTrue(board.of(key).filter { it.group == StrokeGroup.SPLASH }.all { it.color == InkColor.RED })
+    }
+
+    @Test fun anEmptyCellCanAlsoBeShotDead() {
+        val board = InkBoard.newGame().apply(GameEvent.CharacterKilled(S, 3))
+        assertEquals(setOf(StrokeGroup.CROSS, StrokeGroup.SPLASH), board.groups(CharKey(S, 3)))
     }
 
     @Test fun expressionOverlaysAreTemporaryAndDoNotTouchStoredStrokes() {
-        val board = InkBoard.newGame().apply(GameEvent.Progressed(PlayerId.KAPPU, 0, Stage.FACE)).completeAll()
+        val board = InkBoard.newGame().progress(K, 0, Stage.FACE)
         val before = board.of(key)
         val cunning = StrokeFactory(1).expressionFace(Expression.CUNNING)
         val shocked = StrokeFactory(2).expressionFace(Expression.SHOCKED)
@@ -139,7 +158,7 @@ class InkBoardTest {
         repeat(60) { seed ->
             val rnd = Random(seed)
             var state = GameEngine.newGame()
-            var ink = InkBoard.newGame().completeAll()
+            var ink = InkBoard.newGame()
             var guard = 0
             while (state.phase != Phase.GAME_OVER && guard++ < 4000) {
                 val result = when (state.phase) {
@@ -153,15 +172,15 @@ class InkBoardTest {
                 ink = ink.apply(result.events).completeAll()
                 for (p in PlayerId.entries) for (c in state.player(p).characters) {
                     val g = ink.groups(CharKey(p, c.index))
-                    assertTrue(StrokeGroup.HEAD in g)
-                    assertEquals("face $seed", c.stage.number >= 2 || (!c.alive && StrokeGroup.FACE in g), StrokeGroup.FACE in g)
+                    assertEquals("circle $seed", c.stage.number >= 1, StrokeGroup.HEAD in g)
+                    assertEquals("face $seed", c.stage.number >= 2, StrokeGroup.FACE in g)
+                    assertEquals("body $seed", c.stage.number >= 3, StrokeGroup.BODY in g)
                     if (c.alive) {
-                        assertFalse(StrokeGroup.CROSS in g)
-                        assertEquals(c.stage.number >= 3, StrokeGroup.BODY in g)
+                        assertFalse(StrokeGroup.CROSS in g || StrokeGroup.SPLASH in g)
                         assertEquals(c.stage.hasGun, StrokeGroup.GUN in g)
                         assertEquals(c.stage.bulletLoaded, StrokeGroup.BULLET in g)
                     } else {
-                        assertTrue(StrokeGroup.CROSS in g)
+                        assertTrue(StrokeGroup.CROSS in g && StrokeGroup.SPLASH in g)
                         assertFalse(StrokeGroup.GUN in g || StrokeGroup.BULLET in g)
                     }
                 }
@@ -186,7 +205,7 @@ class WobbleTest {
 
     @Test fun allStrokesStayInsideTheCharacterBox() {
         val f = StrokeFactory(21)
-        val all = f.head() + f.face() + f.body() + f.gun() + f.bullet() + f.cross() +
+        val all = f.head() + f.face() + f.body() + f.gun() + f.bullet() + f.cross() + f.splash() +
             Expression.entries.flatMap { f.expressionFace(it) }
         all.flatMap { it.points }.forEach {
             assertTrue("x=${it.x}", it.x in -0.02f..1.02f)

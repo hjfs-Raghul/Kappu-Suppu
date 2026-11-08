@@ -52,6 +52,7 @@ class AndroidGameAudio(context: Context) : GameAudio {
         .build()
     private val flipSound = soundPool.load(appContext, R.raw.page_flip, 1)
     private val pencilSound = soundPool.load(appContext, R.raw.pencil_scratch, 1)
+    private val gunSound = soundPool.load(appContext, R.raw.gunshot, 1)
     private val loaded = HashSet<Int>()
     private var pencilStream = 0
 
@@ -95,6 +96,11 @@ class AndroidGameAudio(context: Context) : GameAudio {
     override fun playPageFlip() {
         if (!effectsAllowed() || flipSound !in loaded) return
         soundPool.play(flipSound, 1f, 1f, 1, 0, 1f)
+    }
+
+    override fun playGunshot() {
+        if (!effectsAllowed() || gunSound !in loaded) return
+        soundPool.play(gunSound, 0.9f, 0.9f, 2, 0, 1f)
     }
 
     override fun setPencilScratching(on: Boolean) {

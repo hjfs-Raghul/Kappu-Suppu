@@ -40,18 +40,17 @@ fun HowToPlayScreen(onBack: () -> Unit) {
         HandText("How to Play", size = 42.sp, bold = true, modifier = Modifier.align(Alignment.CenterHorizontally))
 
         Section("1. Choose a page") {
-            Body("Two players, one phone: Kappu and Suppu, five characters each. On your turn open a book (a real one, or the built-in simulator) and look at the EVEN page, the left one.")
-            Body("Example: you open pages 126 | 127. Use 126.")
+            Body("Two players, one phone: Kappu (left column) and Suppu (right column), five characters each. Each player has a book button under their column. Only the player whose turn it is can use it.")
+            Body("Open a real book and type the EVEN page (the left one), or let the simulator open a pretend book. The page is used straight away. Example: pages 126 | 127 means 126.")
         }
 
         Section("2. Which character?") {
-            Body("Only the last digit of the even page matters:")
-            Body("0 = Character 1,  2 = Character 2,  4 = Character 3,  6 = Character 4,  8 = Character 5.")
-            Body("126 ends in 6, so Character 4 acts. If that character is dead, the turn is simply lost.")
+            Body("Only the last digit of the even page matters. Each row of the board shows its digit as a faint number in the corner: 0, 2, 4, 6 and 8, from top to bottom.")
+            Body("126 ends in 6, so the player on the 6 row acts. If that character is dead, the turn is simply lost.")
         }
 
         Section("3. Characters grow") {
-            Body("Every matching digit adds to the drawing, on top of what is already there:")
+            Body("Every cell starts empty. Each matching digit adds to the drawing, on top of what is already there:")
             StageRow(
                 listOf(
                     Stage.CIRCLE to "1: circle",
@@ -65,16 +64,16 @@ fun HowToPlayScreen(onBack: () -> Unit) {
         }
 
         Section("4. Shooting") {
-            Body("When a character with a LOADED gun (stage 5) gets its digit, you may shoot. Choose any living enemy character and confirm. Your bullet is used up, but your character and its gun stay.")
+            Body("When a character with a LOADED gun (stage 5) gets its digit, you may shoot. Every living enemy character lights up on the board: tap the one you want to hit. The bullet flies across and your bullet is used up, but your character and its gun stay. Kappu's gun points right, Suppu's points left.")
             StageRow(listOf(Stage.LOADED to "loaded", Stage.GUN to "after the shot"))
         }
 
         Section("5. Gun defence") {
-            Body("A target WITHOUT a gun (stages 1, 2 or 3) is out for good and crossed off:")
+            Body("A target WITHOUT a gun (empty cell, or stages 1, 2 or 3) is shot dead for good. A red splash and a cross mark it:")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Example(Stage.BODY, dead = true, caption = "no gun: dead")
             }
-            Body("A target WITH a gun (loaded or not) only loses the gun and its bullet. It survives, goes back to stage 3 and looks shocked:")
+            Body("A target WITH a gun (loaded or not) only loses the gun and its bullet: the bullet breaks the gun. It survives, goes back to stage 3 and looks shocked:")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Example(Stage.LOADED, caption = "before")
                 Example(Stage.BODY, caption = "after", expression = Expression.SHOCKED)

@@ -12,6 +12,8 @@ enum class PlayerId(val displayName: String) {
 
 /** Drawing progression of a character. Gun / bullet are derived from the stage. */
 enum class Stage(val number: Int) {
+    /** A fresh cell: nothing is drawn yet. The first matching digit draws the circle. */
+    EMPTY(0),
     CIRCLE(1),
     FACE(2),
     BODY(3),
@@ -33,7 +35,7 @@ enum class Expression { NORMAL, CUNNING, SHOCKED }
  */
 data class GameCharacter(
     val index: Int,
-    val stage: Stage = Stage.CIRCLE,
+    val stage: Stage = Stage.EMPTY,
     val alive: Boolean = true,
     val expression: Expression = Expression.NORMAL,
 ) {

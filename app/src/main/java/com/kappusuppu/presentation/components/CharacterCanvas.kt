@@ -12,6 +12,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import com.kappusuppu.domain.model.Expression
+import com.kappusuppu.domain.model.PlayerId
 import com.kappusuppu.drawing.CharKey
 import com.kappusuppu.drawing.InkColor
 import com.kappusuppu.drawing.InkMath
@@ -90,6 +91,8 @@ fun CharacterCanvas(
         }
     }
 
+    // Kappu faces right and Suppu faces left: Suppu's whole drawing is mirrored, so his gun is on the left
+    val mirror = key.player == PlayerId.SUPPU
     val hasFace = strokes.any { it.group == StrokeGroup.FACE }
     val showOverlay = expression != Expression.NORMAL && hasFace
     val dead = strokes.any { it.group == StrokeGroup.CROSS }
@@ -104,7 +107,7 @@ fun CharacterCanvas(
         fun paint(points: List<Pt>, fraction: Float, color: InkColor, widthFactor: Float, alpha: Float) {
             val part = InkMath.partial(points, fraction)
             if (part.size < 2) return
-            val mapped = part.map { Pt(ox + it.x * side, oy + it.y * side) }
+            val mapped = part.map { Pt(ox + (if (mirror) 1f - it.x else it.x) * side, oy + it.y * side) }
             val c = if (color == InkColor.RED) Notebook.Bullet else Notebook.Graphite
             drawPencil(mapped, c, base * widthFactor, alpha)
         }

@@ -35,10 +35,10 @@ class PlayerSetupTest {
         assertEquals(PlayerId.KAPPU, s.currentPlayer)
     }
 
-    @Test fun everyCharacterStartsAsAliveStageOneCircle() {
+    @Test fun everyCharacterStartsAliveAndEmpty() {
         val s = GameEngine.newGame()
         (s.kappu.characters + s.suppu.characters).forEach {
-            assertEquals(Stage.CIRCLE, it.stage)
+            assertEquals(Stage.EMPTY, it.stage)
             assertTrue(it.alive)
             assertFalse(it.hasGun)
             assertFalse(it.bulletLoaded)

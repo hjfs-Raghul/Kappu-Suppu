@@ -7,25 +7,30 @@ book decides which character gets to act.
 Native Android: Kotlin, Jetpack Compose, MVVM, StateFlow, Navigation Compose. No network permission,
 no login, no backend, no saved games (closing the app ends the game).
 
-> **Build status, honestly stated.** The pure-Kotlin game engine, the drawing-data layer and the session
-> logic are covered by **96 unit tests, which pass**. The Compose UI, audio player and Gradle/AGP build
-> were written against the documented APIs but **have not been compiled by the author of this project
-> archive**, because the environment it was produced in had no access to Google's Maven repository. The
-> GitHub Actions workflow is the first real compile. If it reports a compile error, see
-> [Known limitations](#known-limitations).
+> **Build status.** The pure-Kotlin game engine, the drawing-data layer and the session logic are covered
+> by **113 unit tests, which pass**. The first version of the app compiled and built an APK on GitHub Actions.
+> The second revision (empty start, one-screen play, firing animation, gunshot) changed a lot of Compose and
+> audio code that **has not been compiled by whoever produced this archive**, because that environment had no
+> access to Google's Maven repository. The GitHub Actions run is the first real compile of it.
 
 ## Rules in one minute
 
-* Open a book (a real one, or the in-app simulator) and read the **even** page. The **last digit** picks the
-  character: `0 → 1`, `2 → 2`, `4 → 3`, `6 → 4`, `8 → 5`. Example: `126 | 127` → use 126 → Character 4.
-* A matching digit adds one drawing stage, on top of the existing pencil drawing:
-  1 circle → 2 eyes + mouth → 3 stick body, arms, legs → 4 gun beside it → 5 red bullet in the gun.
+* Kappu owns the left column and faces right; Suppu owns the right column and faces left. Each player has a
+  book button under their column. Only the player whose turn it is can use theirs.
+* Opening a page (type the **even** page of a real book, or let the simulator open a pretend 200-page book)
+  applies it at once. The **last digit** picks the character: `0 → 1st row`, `2 → 2nd`, `4 → 3rd`, `6 → 4th`,
+  `8 → 5th`. Example: `126 | 127` → use 126 → digit 6 → 4th row. Each row shows its digit faintly in the corner.
+* Every cell starts **empty**. A matching digit adds one stage, on top of the existing pencil drawing:
+  empty → 1 circle → 2 eyes + mouth → 3 stick body, arms, legs → 4 gun beside it → 5 red bullet in the gun.
+  Kappu's gun is on his right, Suppu's on his left, each pointing at the opponent.
 * A character at stage 4 that gets its digit **loads** the bullet (stage 5). A character at stage 5 that gets
-  its digit **may shoot**: the shooter manually picks any living enemy character and confirms.
-* After shooting, the bullet is gone (stage 4), the shooter lives on, and it can reload later. Unlimited.
-* **Defence:** a target with no gun (stage 1–3) dies and is crossed out. A target **with** a gun, loaded or
-  not, only loses the gun and bullet and drops to stage 3. It must rebuild: gun first, bullet next.
-* Loading never grants an extra turn. Dead characters waste the turn. Kappu and Suppu alternate.
+  its digit **may shoot**: every living enemy character is highlighted and tapping one fires at once.
+* The shot runs in two steps: the gun fires (gunshot), then the bullet hits. A target **with** a gun (loaded or
+  not) has the gun broken by the bullet and drops to stage 3. A target with **no** gun (empty cell, stages 1–3)
+  is shot dead: a slight red splash and a cross.
+* After shooting, the bullet is gone (stage 4), the shooter lives on and can reload later. Unlimited.
+* A character that lost its gun must rebuild: gun first, bullet next. Loading never grants an extra turn.
+  Dead characters waste the turn. Kappu and Suppu alternate; Kappu starts.
 * A player with no living characters is eliminated; the other player wins.
 
 ## Project layout
@@ -35,7 +40,7 @@ app/src/main/java/com/kappusuppu/
   domain/            pure Kotlin, no Android: model/, rules/, actions/, engine/
   drawing/           stroke data and pencil geometry (pure Kotlin): InkBoard, StrokeFactory, Wobble
   data/audio/        GameAudio interface + AndroidGameAudio (MediaPlayer + SoundPool)
-  presentation/      Compose UI: home, roles, book, game, target, result, howtoplay, components, theme
+  presentation/      Compose UI: home, roles, book, game (board, turn dock, shot overlay), result, howtoplay, components, theme
 app/src/main/res/raw/  bundled audio (4 OGG files)
 app/src/test/          unit tests (JUnit 4)
 tools/generate_audio.py   regenerates every audio asset from scratch
@@ -52,9 +57,10 @@ How the requirements map onto the code:
 | Even-page validation, last-digit mapping | `domain/rules/PageRules.kt` |
 | 200-page simulator | `domain/engine/BookSimulator.kt` (`nextInt(1, 101) * 2` → 2…200) |
 | Cumulative, stroke-by-stroke drawing | `drawing/InkBoard.kt` (persistent strokes, only new ones animate), `presentation/components/CharacterCanvas.kt` |
+| Facing (Suppu mirrored), shot geometry | `presentation/game/BoardGeometry.kt`, `CharacterCanvas.kt` |
 | Cunning / shocked faces | `StrokeFactory.expressionFace`, shown as a temporary overlay; stored strokes are never changed |
 | 6 × 2 notebook board | `presentation/game/NotebookBoard.kt` |
-| Target selection, cancel, confirm | `presentation/target/TargetScreen.kt`, `presentation/game/GameSession.kt` |
+| Per-player book, auto-resolve, tap-to-fire, 3-stage shot | `presentation/game/GameSession.kt`, `GameViewModel.kt`, `TurnDock.kt`, `NotebookBoard.kt` (shot overlay) |
 | Audio, focus and lifecycle | `data/audio/AndroidGameAudio.kt` |
 
 ## Open it in Android Studio
@@ -76,9 +82,9 @@ How the requirements map onto the code:
 ```
 
 The report is written to `app/build/reports/tests/testDebugUnitTest/index.html`. The tests need no emulator.
-They cover player setup, physical-book validation, the simulator range, progression, shooting, defence,
+They cover player setup (all cells empty), physical-book validation, the simulator range, progression, shooting, defence,
 reload, recovery, turn management, duplicate taps and cancelled shots, the stroke data (cumulative drawing,
-only new strokes animate, red bullet only, gun removal keeps face and body) and the session flow.
+only new strokes animate, gun removal keeps face and body), the session flow (turn ownership, auto-apply, tap-to-fire, aim/fire/impact steps) and the board geometry (columns, facing, bullet direction).
 
 ## Build the APK
 
@@ -134,7 +140,7 @@ be raised freely.
 
 ## Audio
 
-All four sounds are **original works generated by `tools/generate_audio.py`** (pure synthesis: sine waves,
+All five sounds are **original works generated by `tools/generate_audio.py`** (pure synthesis: sine waves,
 filtered noise and envelopes; nothing sampled, nothing downloaded). They are released under **CC0 1.0**
 (public domain). Run `python3 tools/generate_audio.py` (needs `numpy`, `scipy`, `ffmpeg` with libvorbis)
 to regenerate them.
@@ -145,15 +151,16 @@ to regenerate them.
 | `pencil_scratch.ogg` | loops while strokes are drawn | 1.4 s loop |
 | `suspense_loop.ogg` | quiet suspense bed during play | 24 s seamless loop |
 | `tension_cue.ogg` | one-shot when a bullet is loaded | 3 s |
+| `gunshot.ogg` | one shot when a character fires | 0.8 s |
 
 Behaviour: one suspense player only (no overlapping copies); the tension cue pauses the loop and the loop
 resumes by itself when the cue ends; a loaded gun does not keep tension music running; the sound toggle
-mutes everything; the app pauses audio and gives up audio focus in the background and resumes gameplay music in
-the foreground; everything stops when the game ends or the player leaves. No shooting or explosion sound exists.
+mutes everything (the gunshot included); the app pauses audio and gives up audio focus in the background and resumes gameplay music in
+the foreground; everything stops when the game ends or the player leaves.
 
 ## Known limitations
 
-* **Not yet compiled or run on a device by the author.** See the note at the top. The first run of the
+* **The latest revision has not been compiled by its author.** See the note at the top. The first run of the
   GitHub Actions workflow (or *Sync* in Android Studio) is the real compile. The most likely things to need a
   touch-up are a Compose API signature or a dependency version that moved; each is a one-line fix in
   `gradle/libs.versions.toml` or the named file.
@@ -164,5 +171,7 @@ the foreground; everything stops when the game ends or the player leaves. No sho
   `presentation/theme/Theme.kt` for a different hand.
 * Portrait only; the 6 × 2 board is sized for phones.
 * Visual layout was reasoned about, not inspected on a screen. Spacing on very small or very large phones may need tuning.
-* Kappu always takes the first turn.
+* Kappu always takes the first turn. Tapping an enemy fires immediately; there is no undo or confirmation.
+* The flying bullet, muzzle flash and hit effects are drawn from assumed cell geometry; if they miss the characters
+  on your phone, the numbers are in `BoardGeometry.kt` and `ShotPoints`.
 * The tension cue is triggered when a bullet is *loaded* (stage 4 → 5), as specified, not when a shot is fired.

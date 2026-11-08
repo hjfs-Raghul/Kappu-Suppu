@@ -15,14 +15,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Holds the one in-memory game. Nothing is persisted: when the process ends the game is gone.
- * All rules live in [GameSession] / the domain engine; this class only forwards input, runs the
- * short animation delays of a shot and triggers audio.
+ * All rules live in [GameSession] / the domain engine. This class forwards input, waits out the
+ * short animation delays of a turn and triggers audio.
  */
 class GameViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -33,12 +35,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
     private val _roleChoice = MutableStateFlow<PlayerId?>(null)
+
     /** Which identity Player 1 picked on the role screen (null until chosen). */
     val roleChoice: StateFlow<PlayerId?> = _roleChoice.asStateFlow()
 
     val soundEnabled: StateFlow<Boolean> get() = audio.soundEnabled
 
-    private var fireJob: Job? = null
+    /** The one running turn sequence (spread -> apply, or aim -> fire -> impact -> settle). */
+    private var turnJob: Job? = null
 
     private val boardVisible = MutableStateFlow(false)
 
@@ -51,7 +55,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Called by the navigation layer while a screen that shows characters is on screen. */
+    /** Called by the navigation layer while the board is on screen. */
     fun setBoardVisible(visible: Boolean) {
         boardVisible.value = visible
     }
@@ -65,7 +69,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startNewGame(mode: BookMode) {
-        fireJob?.cancel()
+        turnJob?.cancel()
         val assignment = PlayerAssignment(_roleChoice.value ?: PlayerId.KAPPU)
         _state.value = session.newGame(assignment, mode)
         audio.startGameplayMusic()
@@ -74,7 +78,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun playAgain() = startNewGame(_state.value.mode)
 
     fun exitToHome() {
-        fireJob?.cancel()
+        turnJob?.cancel()
         audio.stopAll()
         _state.value = SessionState()
     }
@@ -86,50 +90,56 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- turn input --------------------------------------------------------------------------
 
-    fun submitPhysicalPage(text: String) = commit(session.submitPhysicalText(_state.value, text))
+    /** Physical book: the player typed an even page number. A valid page is applied immediately. */
+    fun submitPhysicalPage(player: PlayerId, text: String) {
+        if (turnJob?.isActive == true) return
+        val t = session.submitPhysicalText(_state.value, player, text)
+        commit(t)
+        if (t.state.step == TurnStep.Resolving) {
+            turnJob = viewModelScope.launch { settle() }
+        }
+    }
 
     fun clearPageError() {
         _state.update { session.clearPageError(it) }
     }
 
-    fun openBook() = commit(session.openBook(_state.value))
-
-    fun confirmSpread() = commit(session.confirmSpread(_state.value))
-
-    /** "Done" on the board. Returns where to go next. */
-    fun continueFromFeedback(): NextStep {
-        val (next, step) = session.continueFromFeedback(_state.value)
-        _state.value = next
-        return step
-    }
-
-    // ---- target selection & shooting ---------------------------------------------------------
-
-    fun selectTarget(index: Int) {
-        _state.update { session.selectTarget(it, index) }
-    }
-
-    fun cancelTarget() {
-        _state.update { session.cancelTarget(it) }
-    }
-
-    fun confirmFire() {
-        if (fireJob?.isActive == true) return // rapid taps while a shot is in flight
-        val begin = session.beginFire(_state.value)
-        if (!begin.state.firing) return
-        commit(begin)
-        fireJob = viewModelScope.launch {
-            delay(CUNNING_MS) // the shooter's cunning face is visible before the shot
-            commit(session.completeFire(_state.value))
-            delay(REACTION_MS) // shocked reaction / gun destruction plays
-            commit(session.finishFire(_state.value))
+    /** Book simulator: shows the spread, then applies its even page by itself. */
+    fun openBook(player: PlayerId) {
+        if (turnJob?.isActive == true) return
+        val t = session.openBook(_state.value, player)
+        if (t.state.step !is TurnStep.SpreadRevealed) return
+        commit(t)
+        turnJob = viewModelScope.launch {
+            delay(GameTiming.SPREAD_MS)
+            commit(session.confirmSpread(_state.value))
+            settle()
         }
     }
 
-    fun continueFromTarget(): NextStep {
-        val (next, step) = session.continueFromTarget(_state.value)
-        _state.value = next
-        return step
+    // ---- shooting ----------------------------------------------------------------------------
+
+    /** A highlighted enemy was tapped: aim (cunning face), fire (gunshot), hit, then settle. */
+    fun fireAt(targetIndex: Int) {
+        if (turnJob?.isActive == true) return // rapid extra taps while a shot is in flight
+        val t = session.fireAt(_state.value, targetIndex)
+        if (t.state.step != TurnStep.Firing) return
+        commit(t)
+        turnJob = viewModelScope.launch {
+            delay(GameTiming.CUNNING_MS)
+            commit(session.launch(_state.value))
+            delay(GameTiming.FLIGHT_MS)
+            commit(session.impact(_state.value))
+            delay(GameTiming.IMPACT_MS)
+            settle()
+        }
+    }
+
+    /** Waits until the pencil / eraser animations are done, then lets the next step begin. */
+    private suspend fun settle() {
+        delay(GameTiming.MIN_RESOLVE_MS)
+        withTimeoutOrNull(GameTiming.ANIMATION_WAIT_MS) { _state.first { !it.ink.isAnimating } }
+        _state.update { session.finishResolving(it) }
     }
 
     // ---- drawing callbacks -------------------------------------------------------------------
@@ -159,12 +169,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             when (effect) {
                 SessionEffect.PageFlip -> audio.playPageFlip()
                 SessionEffect.TensionCue -> audio.playTensionCue()
+                SessionEffect.Gunshot -> audio.playGunshot()
             }
         }
-    }
-
-    private companion object {
-        const val CUNNING_MS = 900L
-        const val REACTION_MS = 1100L
     }
 }

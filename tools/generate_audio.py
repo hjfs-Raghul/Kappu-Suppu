@@ -156,6 +156,18 @@ def tension_cue():
     return fade(normalize(sig, 0.7), 0.02, 0.5)
 
 
+def gunshot():
+    sec = 0.8
+    t = t_axis(sec)
+    noise = RNG.standard_normal(len(t))
+    crack = highpass(noise, 900) * np.exp(-t * 55)                    # sharp initial crack
+    freq = 150 * np.exp(-t * 10) + 48                                   # body: pitch falls quickly
+    thump = np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t * 11)
+    tail = lowpass(noise, 1400) * np.exp(-t * 6.5) * 0.35               # short room tail
+    sig = crack * 1.1 + thump * 1.0 + tail
+    return fade(normalize(sig, 0.8), 0.001, 0.15)
+
+
 def write_ogg(name, samples, quality="4"):
     os.makedirs(OUT, exist_ok=True)
     pcm = (np.clip(samples, -1, 1) * 32767).astype(np.int16)
@@ -175,3 +187,4 @@ if __name__ == "__main__":
     write_ogg("pencil_scratch", pencil_scratch())
     write_ogg("suspense_loop", suspense_loop(), "2")
     write_ogg("tension_cue", tension_cue())
+    write_ogg("gunshot", gunshot())

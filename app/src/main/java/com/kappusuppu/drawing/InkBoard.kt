@@ -68,6 +68,7 @@ data class InkBoard(
         is GameEvent.Progressed -> {
             val key = CharKey(event.player, event.index)
             when (event.to) {
+                Stage.CIRCLE -> add(key, factory(key).head())
                 Stage.FACE -> add(key, factory(key).face())
                 Stage.BODY -> add(key, factory(key).body())
                 Stage.GUN -> add(key, factory(key).gun())
@@ -86,7 +87,8 @@ data class InkBoard(
 
         is GameEvent.CharacterKilled -> {
             val key = CharKey(event.player, event.index)
-            add(key, factory(key).cross())
+            val f = factory(key)
+            add(key, f.cross() + f.splash())
         }
 
         is GameEvent.DeadCharacterSkipped,
@@ -110,16 +112,7 @@ data class InkBoard(
     )
 
     companion object {
-        /** A new game: every character begins as a plain empty circle that gets drawn. */
-        fun newGame(): InkBoard {
-            var board = InkBoard(emptyMap())
-            for (player in PlayerId.entries) {
-                for (i in 0 until CHARACTERS_PER_PLAYER) {
-                    val key = CharKey(player, i)
-                    board = board.add(key, board.factory(key).head())
-                }
-            }
-            return board
-        }
+        /** A new game: every cell is empty. The circle appears when the first matching digit comes up. */
+        fun newGame(): InkBoard = InkBoard(emptyMap())
     }
 }

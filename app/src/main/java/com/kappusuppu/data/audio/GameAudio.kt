@@ -14,6 +14,9 @@ interface GameAudio {
 
     fun playPageFlip()
 
+    /** One gunshot when a character fires. */
+    fun playGunshot()
+
     /** Loops the pencil-scratching sound while strokes are being drawn. */
     fun setPencilScratching(on: Boolean)
 

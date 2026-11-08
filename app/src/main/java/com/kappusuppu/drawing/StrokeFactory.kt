@@ -6,7 +6,7 @@ import kotlin.random.Random
 enum class InkColor { GRAPHITE, RED }
 
 /** Which part of the character a stroke belongs to. */
-enum class StrokeGroup { HEAD, FACE, BODY, GUN, BULLET, CROSS }
+enum class StrokeGroup { HEAD, FACE, BODY, GUN, BULLET, CROSS, SPLASH }
 
 /** Geometry of one stroke in the 0..1 character box (y grows downwards). */
 data class StrokeSpec(
@@ -29,7 +29,7 @@ class StrokeFactory(seed: Long) {
     private fun seg(group: StrokeGroup, ax: Float, ay: Float, bx: Float, by: Float) =
         spec(group, Wobble.line(Pt(ax, ay), Pt(bx, by), rnd))
 
-    /** Stage 1: plain empty circle. Nothing else. */
+    /** Stage 1: plain empty circle (drawn by the first matching digit on a fresh, empty cell). */
     fun head(): List<StrokeSpec> =
         listOf(spec(StrokeGroup.HEAD, Wobble.ellipse(HEAD_X, HEAD_Y, HEAD_R, HEAD_R, rnd)))
 
@@ -58,16 +58,28 @@ class StrokeFactory(seed: Long) {
         return listOf(spec(StrokeGroup.GUN, Wobble.polyline(outline, rnd, closed = true, amp = 0.005f, step = 0.03f)))
     }
 
-    /** Stage 5: red bullet inside the gun barrel. The only coloured strokes in the game. */
+    /** Stage 5: the loaded bullet, one plain thick red line that fits inside the gun barrel. */
     fun bullet(): List<StrokeSpec> = listOf(
-        spec(StrokeGroup.BULLET, Wobble.line(Pt(0.60f, 0.535f), Pt(0.78f, 0.535f), rnd, 0.002f, 0.03f), InkColor.RED, 2.4f),
-        spec(
-            StrokeGroup.BULLET,
-            Wobble.polyline(listOf(Pt(0.78f, 0.505f), Pt(0.84f, 0.535f), Pt(0.78f, 0.565f)), rnd, closed = false, amp = 0.002f, step = 0.03f),
-            InkColor.RED,
-            1.6f,
-        ),
+        spec(StrokeGroup.BULLET, Wobble.line(Pt(0.60f, 0.535f), Pt(0.80f, 0.535f), rnd, 0.0015f, 0.03f), InkColor.RED, 2.8f),
     )
+
+    /** Slight red splash on the chest of a character that has been shot dead. */
+    fun splash(): List<StrokeSpec> {
+        val cx = HEAD_X
+        val cy = 0.56f
+        val rays = listOf(
+            Triple(-2.6f, 0.035f, 0.075f), Triple(-1.9f, 0.04f, 0.085f), Triple(-0.7f, 0.035f, 0.07f),
+            Triple(0.3f, 0.04f, 0.08f), Triple(1.2f, 0.035f, 0.07f), Triple(2.2f, 0.04f, 0.085f),
+        )
+        val lines = rays.map { (a, r0, r1) ->
+            val ca = kotlin.math.cos(a.toDouble()).toFloat()
+            val sa = kotlin.math.sin(a.toDouble()).toFloat()
+            spec(StrokeGroup.SPLASH, Wobble.line(Pt(cx + ca * r0, cy + sa * r0), Pt(cx + ca * r1, cy + sa * r1), rnd, 0.002f, 0.02f), InkColor.RED, 1.5f)
+        }
+        val dots = listOf(Pt(cx - 0.11f, cy + 0.07f), Pt(cx + 0.12f, cy - 0.05f), Pt(cx + 0.09f, cy + 0.09f), Pt(cx - 0.06f, cy - 0.09f))
+            .map { spec(StrokeGroup.SPLASH, Wobble.ellipse(it.x, it.y, 0.011f, 0.011f, rnd, 0.3), InkColor.RED, 2.2f) }
+        return lines + dots + spec(StrokeGroup.SPLASH, Wobble.ellipse(cx, cy, 0.02f, 0.02f, rnd, 0.3), InkColor.RED, 2.6f)
+    }
 
     /** Dead marker: a big pencil cross over the whole cell. Drawn on top, the character stays visible. */
     fun cross(): List<StrokeSpec> = listOf(

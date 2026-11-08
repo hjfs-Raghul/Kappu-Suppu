@@ -38,6 +38,7 @@ private fun GameState.fire(targetIndex: Int, target: PlayerId = S): EngineResult
     GameEngine.fireShot(this, target, targetIndex, turnNumber).applied()
 
 class CharacterProgressionTest {
+    @Test fun emptyToCircle() = progress(Stage.EMPTY, Stage.CIRCLE)
     @Test fun stageOneToTwo() = progress(Stage.CIRCLE, Stage.FACE)
     @Test fun stageTwoToThree() = progress(Stage.FACE, Stage.BODY)
     @Test fun stageThreeToFour() = progress(Stage.BODY, Stage.GUN)
@@ -67,14 +68,14 @@ class CharacterProgressionTest {
     @Test fun onlyTheMatchingCharacterChanges() {
         val s = GameEngine.newGame()
         val after = s.play(4).state
-        for (i in 0..3) assertEquals(Stage.CIRCLE, after.character(K, i).stage)
-        assertEquals(Stage.FACE, after.character(K, 4).stage)
-        after.suppu.characters.forEach { assertEquals(Stage.CIRCLE, it.stage) }
+        for (i in 0..3) assertEquals(Stage.EMPTY, after.character(K, i).stage)
+        assertEquals(Stage.CIRCLE, after.character(K, 4).stage)
+        after.suppu.characters.forEach { assertEquals(Stage.EMPTY, it.stage) }
     }
 
     @Test fun fullProgressionOverFiveMatchingTurns() {
         var s = GameEngine.newGame()
-        val expected = listOf(Stage.FACE, Stage.BODY, Stage.GUN, Stage.LOADED)
+        val expected = listOf(Stage.CIRCLE, Stage.FACE, Stage.BODY, Stage.GUN, Stage.LOADED)
         for (e in expected) {
             s = s.play(0).state                        // Kappu's turn
             assertEquals(e, s.character(K, 0).stage)
@@ -173,6 +174,7 @@ class DefenceTest {
         return s.fire(1)
     }
 
+    @Test fun emptyTargetDies() = dies(Stage.EMPTY)
     @Test fun stageOneTargetDies() = dies(Stage.CIRCLE)
     @Test fun stageTwoTargetDies() = dies(Stage.FACE)
     @Test fun stageThreeTargetDies() = dies(Stage.BODY)
@@ -337,7 +339,7 @@ class TurnManagementTest {
 
     @Test fun noExtraTurnsAreEverGranted() {
         // every kind of action advances the turn by exactly one
-        val actions = listOf(Stage.CIRCLE, Stage.FACE, Stage.BODY, Stage.GUN)
+        val actions = listOf(Stage.EMPTY, Stage.CIRCLE, Stage.FACE, Stage.BODY, Stage.GUN)
         for (stage in actions) {
             val s = GameEngine.newGame().with(K, 0, stage)
             val r = s.play(0)
@@ -429,8 +431,8 @@ class InputProtectionTest {
         // the second tap re-sends the same turn number against the NEW state
         val second = GameEngine.submitPage(first.state, pageFor(0), turn)
         assertEquals(EngineResult.Rejected(RejectReason.STALE_TURN), second)
-        assertEquals(Stage.FACE, first.state.character(K, 0).stage)
-        assertEquals(Stage.CIRCLE, first.state.character(S, 0).stage)
+        assertEquals(Stage.CIRCLE, first.state.character(K, 0).stage)
+        assertEquals(Stage.EMPTY, first.state.character(S, 0).stage)
     }
 
     @Test fun duplicateRapidShotIsRejectedAndConsumesBulletOnce() {
@@ -457,7 +459,7 @@ class InputProtectionTest {
         assertTrue(cancelled.character(K, 0).bulletLoaded)
         assertEquals(Phase.AWAITING_TARGET, cancelled.phase)
         assertEquals(K, cancelled.currentPlayer)
-        cancelled.suppu.characters.forEach { assertEquals(Stage.CIRCLE, it.stage); assertTrue(it.alive) }
+        cancelled.suppu.characters.forEach { assertEquals(Stage.EMPTY, it.stage); assertTrue(it.alive) }
         // and the shot can still be taken afterwards
         assertTrue(GameEngine.fireShot(cancelled, S, 0, cancelled.turnNumber) is EngineResult.Applied)
     }
