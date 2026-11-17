@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pencil-doodle icon: a head with eyes, mouth, stick body and a gun holding one red bullet. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- head -->
+    <path
+        android:pathData="M40,22 C31,22 25,29 25,37 C25,46 32,52 40,52 C49,52 55,45 55,37 C55,29 48,21 39,23"
+        android:strokeColor="#2B2B2B"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- eyes and mouth -->
+    <path
+        android:pathData="M34,34 L34,36 M46,34 L46,36 M34,43 C38,44 42,44 46,43"
+        android:strokeColor="#2B2B2B"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+    <!-- body, arms and legs -->
+    <path
+        android:pathData="M40,52 L40,76 M40,60 L26,68 M40,60 L58,64 M40,76 L28,94 M40,76 L52,94"
+        android:strokeColor="#2B2B2B"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- gun -->
+    <path
+        android:pathData="M58,58 L86,58 L86,68 L70,68 L67,80 L61,80 L63,68 L58,68 Z"
+        android:strokeColor="#2B2B2B"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- red bullet -->
+    <path
+        android:pathData="M64,63 L77,63"
+        android:strokeColor="#D32F2F"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+</vector>
